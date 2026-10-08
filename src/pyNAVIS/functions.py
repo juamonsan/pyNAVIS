@@ -55,6 +55,8 @@ class Functions:
                 If on_off_both is set to 1 (both) in the MainSettings, then addresses should be less than num_channels*2.
 
                 If mono_stereo is set to 1 and on_off_both is set to 1 in the MainSettings, then addresses should be less than num_channels*2*2.
+
+                If mono_stereo is set to 2 (three-axis) in the MainSettings, then addresses should be less than num_channels*3 (num_channels*2*3 if on_off_both is set to 1).
         """
 		# Convert to numpy arrays
 		addresses = np.asarray(spikes_file.addresses)
@@ -232,11 +234,11 @@ class Functions:
 	@staticmethod
 	def stereo_to_mono(spikes_file, left_right, settings, return_save_both = 0, path = None, output_format = '.aedat'):
 		"""
-		Generates a mono AEDAT SpikesFile from a stereo SpikesFile.
+		Generates a mono AEDAT SpikesFile from a stereo or three-axis SpikesFile.
 
 		Parameters:
 				spikes_file (SpikesFile): Input file.
-				left_right (int): Set to 0 if you want to extract the left part of the SpikesFile, or to 1 if you want the right part.
+				left_right (int): Source to extract. For stereo files, set to 0 for the left part or to 1 for the right part. For three-axis files, set to 0, 1 or 2 for the X, Y or Z axis.
 				settings (MainSettings): Configuration parameters for the input file.
 				return_save_both (int, optional): Set it to 0 to return the SpikesFile, to 1 to save the SpikesFile in the output path, and to 2 to do both.
 				path (string, optional): Path where the output file will be saved. Format should not be specified. Not needed if return_save_both is set to 0.
@@ -248,9 +250,12 @@ class Functions:
 		
 		Raises:
 				AttributeError: If the input file is a mono SpikesFile (settings.mono_stereo is set to 0).
+				SettingsError: If left_right is not a valid source index for the input file.
 		"""
 
-		if settings.mono_stereo:
+		if settings.mono_stereo and not (0 <= left_right < settings.num_sources):
+			print("[Functions.stereo_to_mono] > SettingsError: left_right should be in the range [0, " + str(settings.num_sources - 1) + "] for this file.")
+		elif settings.mono_stereo:
 			# Convert to numpy arrays if they aren't already
 			if not isinstance(spikes_file.addresses, np.ndarray):
 				addresses = np.array(spikes_file.addresses)
@@ -262,7 +267,7 @@ class Functions:
 			else:
 				timestamps = spikes_file.timestamps
 
-			# Calculate address range for the selected channel (left or right)
+			# Calculate address range for the selected source (left/right cochlea or X/Y/Z axis)
 			channel_offset = left_right * settings.num_channels * (settings.on_off_both + 1)
 			min_addr = channel_offset
 			max_addr = (left_right + 1) * settings.num_channels * (settings.on_off_both + 1)
@@ -275,7 +280,7 @@ class Functions:
 			# Create new SpikesFile
 			spikes_file_mono = SpikesFile([], [])
 			
-			# Adjust addresses if extracting right channel (subtract offset to start from 0)
+			# Adjust addresses if not extracting the first source (subtract offset to start from 0)
 			if left_right:
 				spikes_file_mono.addresses = filtered_addresses - channel_offset
 			else:
@@ -322,7 +327,7 @@ class Functions:
 				SpikesFile: SpikesFile containing the shift. Returned only if return_save_both is either 0 or 2.
 		
 		Raises:
-				SettingsError: If the input file is a stereo SpikesFile (settings.mono_stereo is set to 1).
+				SettingsError: If the input file is not a mono SpikesFile (settings.mono_stereo is not set to 0).
 
 		Note:	The timestamp of the left event is used as reference. Thus, the timestamp of the right event will be ts_right = ts_left + delay.
 		"""
@@ -375,7 +380,7 @@ class Functions:
 					return spikes_file_new
 
 		else:
-			print("[Functions.mono_to_stereo] > SettingsError: this functionality cannot be performed over a stereo aedat file.")
+			print("[Functions.mono_to_stereo] > SettingsError: this functionality can only be performed over a mono aedat file.")
 
 	@staticmethod
 	def extract_channels_activities(spikes_file, addresses, reset_addresses = True, verbose = False):

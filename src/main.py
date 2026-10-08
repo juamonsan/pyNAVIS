@@ -1,6 +1,6 @@
 import os
 
-from examples import gen_random, gen_shift, gen_sweep, load_stereo_AEDAT, manual_split, stereo_to_mono, mono_to_stereo, phaselock, load_stereo_localization_AEDAT, load_stereo_localization_CSV, load_stereo_localization_ZynqGrabber
+from examples import gen_random, gen_shift, gen_sweep, load_stereo_AEDAT, load_three_axis_AEDAT, manual_split, stereo_to_mono, mono_to_stereo, phaselock, load_stereo_localization_AEDAT, load_stereo_localization_CSV, load_stereo_localization_ZynqGrabber
 from pyNAVIS import Loaders, Plots, MainSettings, Functions
 import matplotlib.pyplot as plt
 
@@ -58,6 +58,15 @@ plt.show()
 
 # settings = MainSettings(num_channels=64, mono_stereo=1, on_off_both=1, address_size=2, ts_tick=0.2, bin_size=20000)
 # load_stereo_AEDAT.run(os.path.join(dirname, 'examples/test_files/523Hz_stereo_64ch_ONOFF_addr2b_ts02.aedat'), settings)
+
+
+
+#%% Load three-axis file example > 1 s accelerometer recording (jAER chip NUS_3Axxis_42ch)
+# Each axis uses 43 channels: 42 active ones plus an always-empty channel that separates it from the next axis,
+# so num_channels=43. jAER saves 4-byte addresses with a 1 us tick.
+
+# settings = MainSettings(num_channels=43, mono_stereo=MainSettings.THREE_AXIS, on_off_both=1, address_size=4, ts_tick=1, bin_size=20000)
+# load_three_axis_AEDAT.run(os.path.join(dirname, 'examples/test_files/NTAS_Accel_3Axxis_43ch_ONOFF_addr4b_ts1.aedat'), settings)
 
 
 #%% Manual split example > extracts the first 100ms from the file

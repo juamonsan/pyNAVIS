@@ -24,7 +24,7 @@ class MainSettings:
     Class that collects the main configuration settings of pyNAVIS
 
     Attributes:
-        mono_stereo (int): Set to 0 for mono files and 1 for stereo files.
+        mono_stereo (int): Set to 0 for mono files, 1 for stereo files and 2 for three-axis (X, Y, Z) files.
         bin_size (int): Bin width (or window size) to use when processing the information.
         ts_tick (float): Timestamp tick. Correspondence factor between timestamp value in file and actual time.
         num_channels (int): Number of cochlea channels.
@@ -43,9 +43,24 @@ class MainSettings:
             Set on_off_both to 0 if addresses are only ON or OFF, or to 1 if using both ON and OFF.
 
             reset_timestamp subtracts the smallest timestamp in the file to each of the timestamps.
+
+            Addresses from each source (mono; left/right cochlea; or X/Y/Z axis) are stored in consecutive blocks of
+            num_channels*(on_off_both+1) addresses. For a three-axis file, X addresses come first, then Y, then Z.
     """
 
+    MONO = 0
+    STEREO = 1
+    THREE_AXIS = 2
+
+    _SOURCE_LABELS = {
+        MONO: ["Mono"],
+        STEREO: ["Left cochlea", "Right cochlea"],
+        THREE_AXIS: ["X axis", "Y axis", "Z axis"],
+    }
+
     def __init__(self, num_channels, mono_stereo = 0, address_size = 2, timestamp_size=4, ts_tick = 1, bin_size = 20000, on_off_both = 1, reset_timestamp = True,verbose=True):
+        if mono_stereo not in self._SOURCE_LABELS:
+            raise ValueError("[MainSettings] > SettingsError: mono_stereo should be 0 (mono), 1 (stereo) or 2 (three-axis).")
         self.num_channels = num_channels
         self.mono_stereo = mono_stereo
         self.address_size = address_size
@@ -55,7 +70,22 @@ class MainSettings:
         self.on_off_both = on_off_both
         self.reset_timestamp = reset_timestamp
         self.verbose = verbose
-        
+
+    @property
+    def num_sources(self):
+        """Number of address blocks in the file: 1 (mono), 2 (stereo) or 3 (three-axis)."""
+        return self.mono_stereo + 1
+
+    @property
+    def addresses_per_source(self):
+        """Number of addresses used by each source (cochlea or axis)."""
+        return self.num_channels * (self.on_off_both + 1)
+
+    @property
+    def source_labels(self):
+        """Human-readable name of each source, in address order."""
+        return self._SOURCE_LABELS[self.mono_stereo]
+
 class LocalizationSettings:
     """
     Class that collects the configuration settings of pyNAVS when working with a NAS model that integrates the sound source localization model.

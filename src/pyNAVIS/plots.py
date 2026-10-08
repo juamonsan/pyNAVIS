@@ -76,21 +76,13 @@ class Plots:
             addresses = np.asarray(spikes_file.addresses) #np.array(spikes_file.addresses, copy=False)
             timestamps = np.asarray(spikes_file.timestamps) #np.array(spikes_file.timestamps, copy=False)
 
-            sup_indexes = np.argwhere(addresses >= mid_address)
+            # Source (cochlea or axis) each spike belongs to. Out-of-range addresses go to the last source
+            source_indexes = np.minimum(addresses // mid_address, settings.num_sources - 1)
 
-            sup_addresses = addresses[sup_indexes]
-            sup_addresses = sup_addresses[::dot_freq]
-            sup_timestamps = timestamps[sup_indexes]
-            sup_timestamps = sup_timestamps[::dot_freq]
-
-            inf_addresses = np.delete(addresses, sup_indexes)
-            inf_addresses = inf_addresses[::dot_freq]
-            inf_timestamps = np.delete(timestamps, sup_indexes)
-            inf_timestamps = inf_timestamps[::dot_freq]
-
-            plt.scatter(inf_timestamps, inf_addresses, s=dot_size, label="Left cochlea", rasterized=True)
-            plt.scatter(sup_timestamps, sup_addresses, s=dot_size, label="Right cochlea", rasterized=True)
-            plt.legend(fancybox=False, ncol=2, loc='upper center', markerscale=2 / dot_size, frameon=True)
+            for source, label in enumerate(settings.source_labels):
+                indexes = np.flatnonzero(source_indexes == source)[::dot_freq]
+                plt.scatter(timestamps[indexes], addresses[indexes], s=dot_size, label=label, rasterized=True)
+            plt.legend(fancybox=False, ncol=settings.num_sources, loc='upper center', markerscale=2 / dot_size, frameon=True)
 
         if verbose:
             print('SPIKEGRAM CALCULATION', time.time() - start_time)
@@ -177,18 +169,14 @@ class Plots:
             size=11, ha='center', va='center', rotation=270)
             """
 
-            if settings.mono_stereo == 1:
-                plt.annotate('Right cochlea',
-                             xy=(1.00, 0.75), xytext=(5, 0),
-                             xycoords=('axes fraction', 'axes fraction'),
-                             textcoords='offset points',
-                             size=11, ha='center', va='center', rotation=270)
-
-                plt.annotate('Left cochlea',
-                             xy=(1.00, 0.25), xytext=(5, 0),
-                             xycoords=('axes fraction', 'axes fraction'),
-                             textcoords='offset points',
-                             size=11, ha='center', va='center', rotation=270)
+            if settings.num_sources > 1:
+                # One label centred on each source's block of addresses (e.g. 0.25 and 0.75 for stereo)
+                for source, label in enumerate(settings.source_labels):
+                    plt.annotate(label,
+                                 xy=(1.00, (source + 0.5) / settings.num_sources), xytext=(5, 0),
+                                 xycoords=('axes fraction', 'axes fraction'),
+                                 textcoords='offset points',
+                                 size=11, ha='center', va='center', rotation=270)
 
             colorbar = plt.colorbar()
             colorbar.set_label('No. of spikes', rotation=270, fontsize='large', labelpad=10)
@@ -230,26 +218,20 @@ class Plots:
         plt.xlabel('Address', fontsize='large')
         plt.ylabel('No. of spikes', fontsize='large')
 
-        if bar_line == 0:
-            if settings.mono_stereo == 1:
-                plt.bar(np.arange(settings.num_channels * (settings.on_off_both + 1)),
-                        spikes_count[0:settings.num_channels * (settings.on_off_both + 1)],
-                        rasterized=True)
-                plt.bar(np.arange(settings.num_channels * (settings.on_off_both + 1)),
-                        spikes_count[settings.num_channels * (settings.on_off_both + 1):settings.num_channels * 2 * (settings.on_off_both + 1)],
-                        rasterized=True)
-            else:
+        if settings.num_sources > 1:
+            # Overlay the sources (cochleae or axes) on the same per-source address axis
+            source_size = settings.addresses_per_source
+            for source, label in enumerate(settings.source_labels):
+                source_count = spikes_count[source * source_size:(source + 1) * source_size]
+                if bar_line == 0:
+                    plt.bar(np.arange(source_size), source_count, label=label, rasterized=True)
+                else:
+                    plt.plot(np.arange(source_size), source_count, label=label, rasterized=True)
+            plt.legend(loc='best', frameon=True)
+        else:
+            if bar_line == 0:
                 plt.bar(np.arange(settings.num_channels * (settings.on_off_both + 1) * (settings.mono_stereo + 1)),
                         spikes_count, rasterized=True)
-        else:
-            if settings.mono_stereo == 1:
-                plt.plot(np.arange(settings.num_channels * (settings.on_off_both + 1)),
-                         spikes_count[0:settings.num_channels * (settings.on_off_both + 1)],
-                         label='Left cochlea', rasterized=True)
-                plt.plot(np.arange(settings.num_channels * (settings.on_off_both + 1)),
-                         spikes_count[settings.num_channels * (settings.on_off_both + 1):settings.num_channels * 2 * (settings.on_off_both + 1)],
-                         label='Right cochlea', rasterized=True)
-                plt.legend(loc='best', frameon=True)
             else:
                 plt.plot(np.arange(settings.num_channels * (settings.on_off_both + 1) * (settings.mono_stereo + 1)),
                          spikes_count, rasterized=True)
@@ -272,8 +254,10 @@ class Plots:
                 verbose (boolean, optional): Set to True if you want the execution time of the function to be printed.
 
         Returns:
-                int[ ] average_activity_L: Average activity array.
-                int[ ] average_activity_R: Average activity array. Only returned if the mono_stereo parameter in settings is set to 1
+                int[ ] average_activity_L: Average activity array (X axis activity for three-axis files).
+                int[ ] average_activity_R: Average activity array. Only returned if the mono_stereo parameter in settings is set to 1 or 2 (Y axis activity for three-axis files).
+                int[ ] average_activity_Z: Average activity array. Only returned if the mono_stereo parameter in settings is set to 2.
+                Figure: The figure, always returned as the last element.
         """
         # Convert to numpy array
         addresses = np.asarray(spikes_file.addresses) #np.array(spikes_file.addresses, copy=False)
@@ -284,9 +268,8 @@ class Plots:
         mid_address = settings.num_channels * (settings.on_off_both + 1)
         num_bins = int(math.ceil(total_time / settings.bin_size))
 
-        average_activity_L = np.zeros(num_bins)
-        if settings.mono_stereo == 1:
-            average_activity_R = np.zeros(num_bins)
+        # One row per source (cochlea or axis)
+        average_activity = np.zeros((settings.num_sources, num_bins))
 
         if verbose:
             start_time = time.time()
@@ -305,10 +288,12 @@ class Plots:
 
         # Calculate the number of spikes in the bins
         for i in range(len(spikes_per_bins)):
-            count_below = np.count_nonzero(spikes_per_bins[i] < mid_address)
-            average_activity_L[i] = count_below
-            if settings.mono_stereo == 1:
-                average_activity_R[i] = len(spikes_per_bins[i]) - count_below
+            if settings.num_sources == 1:
+                average_activity[0, i] = np.count_nonzero(spikes_per_bins[i] < mid_address)
+            else:
+                # Out-of-range addresses are counted in the last source
+                source_indexes = np.minimum(spikes_per_bins[i] // mid_address, settings.num_sources - 1)
+                average_activity[:, i] = np.bincount(source_indexes, minlength=settings.num_sources)
 
         if verbose:
             print('AVERAGE ACTIVITY CALCULATION', time.time() - start_time)
@@ -320,16 +305,14 @@ class Plots:
         plt.xlabel('Bin (' + str(settings.bin_size) + '$\mu$s width)', fontsize='large')
         plt.ylabel('No. of spikes', fontsize='large')
 
-        plt.plot(bins / settings.bin_size, average_activity_L, label='Left cochlea', rasterized=True)
-        if settings.mono_stereo == 1:
-            plt.plot(bins / settings.bin_size, average_activity_R, label='Right cochlea')
-            plt.legend(loc='best', ncol=2, frameon=True)
+        for source, label in enumerate(settings.source_labels):
+            plt.plot(bins / settings.bin_size, average_activity[source], label=label, rasterized=True)
+        if settings.num_sources > 1:
+            plt.legend(loc='best', ncol=settings.num_sources, frameon=True)
 
         plt.tight_layout()
-        if settings.mono_stereo == 0:
-            return average_activity_L, avg_fig
-        else:
-            return average_activity_L, average_activity_R, avg_fig
+        # One activity array per source, followed by the figure
+        return (*average_activity, avg_fig)
 
     @staticmethod
     def difference_between_LR(spikes_file, settings, return_data=False, graph_title='Diff. between L and R cochlea',
@@ -349,7 +332,7 @@ class Plots:
                 int[ , ]: Disparity matrix. Only returned if return_data is set to True.
 
         Raises:
-                SettingsError: if settings.mono_stereo == 0
+                SettingsError: if settings.mono_stereo != 1
 
         Note:
                 This function can only be called if the mono_stereo parameter in settings is set to 1.
@@ -427,7 +410,7 @@ class Plots:
                 return diff
         else:
             # print("This functionality is only available for stereo AEDAT files.")
-            print("[Plots.difference_between_LR] > SettingsError: This functionality is only available for stereo files.")
+            print("[Plots.difference_between_LR] > SettingsError: This functionality is only available for stereo files (mono_stereo = 1).")
 
     @staticmethod
     def mso_heatmap(localization_file, localization_settings, graph_title="MSO heatmap", enable_colorbar=True,

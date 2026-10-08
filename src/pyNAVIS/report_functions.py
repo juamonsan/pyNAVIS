@@ -98,14 +98,12 @@ class ReportFunctions:
 
             # Average activity
             if "Average activity" in plots:
-                if settings.mono_stereo == 0:
-                    _, avg_fig = Plots.average_activity(spikes_file, settings)
-                else:
-                    _, _, avg_fig = Plots.average_activity(spikes_file, settings)
+                # Returns one activity array per source (mono, stereo or three-axis), then the figure
+                *_, avg_fig = Plots.average_activity(spikes_file, settings)
                 figures.append(avg_fig)
 
-            # Difference between L/R
-            if "Difference between L/R" in plots:
+            # Difference between L/R (only meaningful for stereo files)
+            if "Difference between L/R" in plots and settings.mono_stereo == 1:
                 dlr_fig = Plots.difference_between_LR(spikes_file, settings)
                 figures.append(dlr_fig)
 

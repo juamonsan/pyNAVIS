@@ -62,3 +62,31 @@ The same procedure, but using the ``stereo_to_mono()``, can be applied to conver
     Plots.spikegram(mono_file, settings)
 
 For more information regarding this function, see :doc:`stereo_to_mono() <../pyNAVIS.functions>`.
+
+Three-axis files
+################
+
+Besides mono (**mono_stereo=0**) and stereo (**mono_stereo=1**) files, pyNAVIS supports three-axis files (**mono_stereo=2**, also available as ``MainSettings.THREE_AXIS``).
+The addresses of each axis are stored in consecutive blocks of ``num_channels*(on_off_both+1)`` addresses: first the X axis, then the Y axis and finally the Z axis.
+
+.. prompt:: python \
+
+    from pyNAVIS import *
+    settings = MainSettings(num_channels=43, mono_stereo=2, on_off_both=1, address_size=4, ts_tick=1, bin_size=20000)
+    three_axis_file = Loaders.loadAEDAT('examples/test_files/NTAS_Accel_3Axxis_43ch_ONOFF_addr4b_ts1.aedat', settings)
+    Plots.spikegram(three_axis_file, settings)
+    x, y, z, avg_fig = Plots.average_activity(three_axis_file, settings)
+
+.. note::
+    The example file is a 1 s accelerometer recording made with the jAER chip ``NUS_3Axxis_42ch``. Each axis has 42 active
+    channels placed in a 43-channel slot (the last channel of each slot is always empty), so **num_channels** is set to 43.
+    jAER saves 4-byte addresses with a 1 us tick, so **address_size=4** and **ts_tick=1**.
+
+A single axis can be extracted as a mono file with ``stereo_to_mono()``, setting **left_right** to 0, 1 or 2 for the X, Y or Z axis:
+
+.. prompt:: python \
+
+    z_file = Functions.stereo_to_mono(three_axis_file, left_right=2, settings=settings, return_save_both=0)
+
+.. note::
+    ``Plots.difference_between_LR()`` is only available for stereo files.
