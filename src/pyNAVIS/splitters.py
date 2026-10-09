@@ -83,6 +83,60 @@ class Splitters:
 
 
     @staticmethod
+    def window_splitter(spikes_file, settings, window_size, stride = None, min_spikes = 1, return_save_both = 0, output_format = '.aedat', path = None):
+        """
+        Splits a SpikesFile into fixed-length time windows. Works with mono, stereo and three-axis files.
+
+        Parameters:
+                spikes_file (SpikesFile): Input file.
+                settings (MainSettings): Configuration parameters for the input file.
+                window_size (int): Length of each window, in the same units as the timestamps (us after adapt_timestamps).
+                stride (int, optional): Time between the start of two consecutive windows. Defaults to window_size (no overlap). Use a smaller value for overlapping windows.
+                min_spikes (int, optional): Windows with fewer spikes than this value are discarded.
+                return_save_both (int, optional): Set it to 0 to return the list of windows, to 1 to save each window in the output path, and to 2 to do both.
+                output_format (string, optional): Output format of the files. Currently supports '.aedat', '.csv', ".txt" and ".txt_rel". See the Savers class for more information.
+                path (string, optional): Base path where the windows will be saved. Each window is saved as path + '_' + window index. Format should not be specified. Not needed if return_save_both is set to 0.
+
+        Returns:
+                SpikesFile[]: List with one SpikesFile per window. Returned only if return_save_both is either 0 or 2.
+
+        Note:
+                Only complete windows are generated: a recording shorter than window_size produces no windows.
+
+                If settings.reset_timestamp is True, the timestamps of each window are relative to the start of the window (not to its first spike),
+                so the position of every spike inside the window is preserved.
+        """
+        if stride is None:
+            stride = window_size
+
+        addresses = np.asarray(spikes_file.addresses)
+        timestamps = np.asarray(spikes_file.timestamps)
+
+        # Windows are located with a binary search, which needs sorted timestamps
+        if np.any(np.diff(timestamps) < 0):
+            order = np.argsort(timestamps, kind='stable')
+            addresses = addresses[order]
+            timestamps = timestamps[order]
+
+        windows = []
+        if len(timestamps) > 0:
+            window_starts = np.arange(timestamps[0], timestamps[-1] - window_size + 1, stride)
+            for start in window_starts:
+                a, b = np.searchsorted(timestamps, [start, start + window_size])
+                if b - a < max(min_spikes, 1):
+                    continue
+
+                window_timestamps = timestamps[a:b] - start if settings.reset_timestamp else timestamps[a:b]
+                windows.append(SpikesFile(addresses[a:b], window_timestamps))
+
+        if return_save_both == 1 or return_save_both == 2:
+            for i, window in enumerate(windows):
+                Savers.save_as_any(window, path=path + '_' + str(i), output_format=output_format, settings=settings)
+        if return_save_both == 0 or return_save_both == 2:
+            return windows
+
+
+    @staticmethod
     def segmenter_RT(spikes_file, noise_threshold, bin_width, return_save_both = 0, output_format = '.aedat', path=None, settings = None, verbose = False):
         """
         Removes background noise.
